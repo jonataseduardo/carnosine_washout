@@ -4,15 +4,15 @@ library(brms)
 
 washout_raw <- fread('carnosine_data.csv')
 
+washout <- melt(washout_raw, id = c('group_id', 'sample_id'), 
+                variable.name = 'week_id')
+
 week_info <- 
   data.table(week_id= c("PRE_S01", "POS_S02", "W01", 
                         "W02", "W03", "W04", "W05", "W06"),
              time_stamp = c(NA, 0, 1, 2, 4, 8, 12, 16)) 
 
 washout <- washout[week_info, on = c("week_id")]
-
-washout <- melt(washout_raw, id = c('group_id', 'sample_id'), 
-                variable.name = 'week_id')
 
 
 # First we will test if the samples in the target group are draw from the
@@ -44,8 +44,6 @@ decay_sample <-
 
 decay_sample[, sample_id := as.factor(sample_id)]
 decay_sample[, group_id := as.factor(group_id)]
-
-
 
 
 
