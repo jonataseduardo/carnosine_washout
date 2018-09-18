@@ -1,6 +1,13 @@
 library(data.table)
 library(ggplot2)
 library(brms)
+library(nlstools)
+library(propagate)
+install.packages('propagate')
+
+help(package = 'nlstools')
+help(package = 'nls2')
+help(package = 'propagate')
 
 washout_raw <- fread('carnosine_data.csv')
 
@@ -53,24 +60,33 @@ classical_linear <-
   lm(formula = value ~ time_stamp, 
      data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-summary(classical_linear)
-classical_linear$coefficients[1]
-
 bayes_linear <- 
   brm(value ~ time_stamp,
       data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-summary(bayes_linear)
-plot(bayes_linear)
-plot(marginal_effects(bayes_linear), points = TRUE)
+predict(bayes_linear)
+predict(classical_linear, interval = 'prediction')
 
-prior_summary(bayes_linear_off)
 
 ## Classical and Bayesian Exponential Fit
 
 classical_exp <- 
   nls( value ~ SSasymp(time_stamp, Asym , R0, lrc), 
       data = washout[group_id == 'T' & !is.na(time_stamp)])
+
+gg <- washout[group_id == 'T' & !is.na(time_stamp)][, .(time_stamp, value)]
+SSasymp
+
+ci1 <- predict(classical_exp)
+ci <- predictNLS(classical_exp, newdata = data.table(time_stamp = 0:16), interval = 'confidence')
+
+plot(ci)
+ci$summary
+
+str(ci)
+
+confint2(classical_exp)
+overview(classical_exp)
 
 exp(coef(classical_exp_off)[['lrc']])
 gp
@@ -83,7 +99,7 @@ coef(classical_linear)
 exp_prior <- 
   prior(normal(20., 10), nlpar = "b1") +
   #prior(student_t(3, 0, 10), lb = 0, nlpar = "b2" ) +
-  prior(normal(0, 5), lb = 0, nlpar = "b2" ) +
+  prior(normal(1, 5), lb = 0, nlpar = "b2" ) +
   prior(normal(20., 5.), nlpar = "b3") 
 
 bayes_exp <- 
@@ -97,9 +113,10 @@ bayes_exp <-
       prior = exp_prior,
       control = list(adapt_delta = 0.99))
 
-summary(bayes_exp)
+predict(bayes_exp)
 
-summary(classical_exp)
+predict(classical_linear)
+
 str(classical_exp)
 classical_exp$predict
 
@@ -147,12 +164,11 @@ classical_exp_off <-
 
 summary(classical_exp_off)
 
-ggplot(data = washout_off[group_id == 'T'], 
-       aes(x = time_stamp, y = value)) +
+p2 <- ggplot(data = washout_off[group_id == 'T'], aes(x = time_stamp, y = value)) +
   geom_point() + 
   stat_smooth(method = 'nls',
               formula = y ~ SSasymp(x, Asym, R0, lrc),
-              se = FALSE
+              se = TRUE
               )
 
 exp_prior_off <- 
@@ -163,8 +179,7 @@ washout_off[, sample_id := as.factor(sample_id)]
 
 bayes_exp_off <- 
   brm(bf(value  ~ b1 * exp(- b2 * time_stamp),  
-         b1 ~ (1 || sample_id),
-         b2 ~ (1 || sample_id),
+         b1 + b2 ~ 1,
          nl = TRUE,
          cmc = FALSE),
       data = washout_off[group_id == 'T'], 
@@ -173,7 +188,12 @@ bayes_exp_off <-
 
 summary(bayes_exp_off)
 plot(bayes_exp_off)
-plot(marginal_effects(bayes_exp_off), points = TRUE)
+predict(bayes_exp_off)
+predict(classical_exp, se.fit = TRUE, level = 0.95)
+
+
+p1 <- plot(marginal_effects(bayes_exp_off), points = TRUE, plot = FALSE)
+
 
 sid <- washout_off[group_id == 'T'][, unique(sample_id)]
 me_loss <- marginal_effects(bayes_exp_off, 
