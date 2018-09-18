@@ -46,14 +46,15 @@ diff_time_tests <-
             t_pval = t.test(init_s, value, alternative = 'less')$p.value), 
           by = time_stamp]
 
-diff_time_tests
 
-#Classical and Bayesian statist analysis for linear model 
+## Classical and Bayesian linear fit
+
 classical_linear <- 
   lm(formula = value ~ time_stamp, 
      data = washout[group_id == 'T' & !is.na(time_stamp)])
 
 summary(classical_linear)
+classical_linear$coefficients[1]
 
 bayes_linear <- 
   brm(value ~ time_stamp,
@@ -63,41 +64,27 @@ summary(bayes_linear)
 plot(bayes_linear)
 plot(marginal_effects(bayes_linear), points = TRUE)
 
+prior_summary(bayes_linear_off)
+
+## Classical and Bayesian Exponential Fit
 
 classical_exp <- 
-  nls( value ~ SSasymp(time_stamp, Asym, R0, lrc), 
+  nls( value ~ SSasymp(time_stamp, Asym , R0, lrc), 
       data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-summary(classical_exp)
+exp(coef(classical_exp_off)[['lrc']])
+gp
 
-ggplot(data = washout[group_id == 'T' & !is.na(time_stamp)], 
-       aes(x = time_stamp, y = value)) +
-  geom_point() + 
-  stat_smooth(method = 'nls',
-              formula = y ~ SSasymp(x, Asym, R0, lrc),
-              se = FALSE
-              )
+classical_exp
+classical_exp_off
 
-mu_control <- 
-  washout[ group_id == 'C' | week_id == 'PRE_S01', 
-          mean(value, na.rm = TRUE)] 
-
-sigma_control <- 
-  washout[group_id == 'C' | week_id == 'PRE_S01', 
-          sd(value, na.rm = TRUE)] 
-
-mu_0 <- 
-  washout[ group_id == 'T' & time_stamp == '0', 
-          mean(value, na.rm = TRUE)] 
-sigma_0 <- 
-  washout[ group_id == 'T' & time_stamp == '0', 
-          sd(value, na.rm = TRUE)] 
-
+coef(classical_linear)
 
 exp_prior <- 
-  prior(normal(21.16837, 17.43511), nlpar = "b1") +
-  prior(normal(0.5, 1), lb = 0, nlpar = "b2" ) +
-  prior(normal(19.58739, 5.145628), nlpar = "b3") 
+  prior(normal(20., 10), nlpar = "b1") +
+  #prior(student_t(3, 0, 10), lb = 0, nlpar = "b2" ) +
+  prior(normal(0, 5), lb = 0, nlpar = "b2" ) +
+  prior(normal(20., 5.), nlpar = "b3") 
 
 bayes_exp <- 
   brm(bf(value  ~ b1 * exp(- b2 * time_stamp) + b3,  
@@ -111,9 +98,14 @@ bayes_exp <-
       control = list(adapt_delta = 0.99))
 
 summary(bayes_exp)
-plot(bayes_exp)
-plot(marginal_effects(bayes_exp), points = TRUE)
 
+summary(classical_exp)
+str(classical_exp)
+classical_exp$predict
+
+plot(bayes_exp)
+
+plot(marginal_effects(bayes_exp), points = TRUE)
 loo(bayes_linear, bayes_exp)
 
 ##########################################
@@ -134,14 +126,10 @@ lw_off <-
 
 washout_off <- lw_off[week_info, on = c("week_id")][!is.na(value)]
 
-
 #Classical and Bayesian statist analysis for linear model 
 classical_linear_off <- 
   lm(formula = value ~ time_stamp, 
      data = washout_off[group_id == 'T'])
-
-summary(classical_linear_off)
-summary(classical_linear)
 
 bayes_linear_off <- 
   brm(value ~ time_stamp,
@@ -168,13 +156,15 @@ ggplot(data = washout_off[group_id == 'T'],
               )
 
 exp_prior_off <- 
-  prior(normal(21.16837, 17.43511), nlpar = "b1") +
-  prior(normal(0.5, 1), lb = 0, nlpar = "b2" )
+  prior(normal(21.16837, 5.43511), nlpar = "b1") +
+  prior(normal(0.0, 5), lb = 0, nlpar = "b2" )
+
+washout_off[, sample_id := as.factor(sample_id)]
 
 bayes_exp_off <- 
   brm(bf(value  ~ b1 * exp(- b2 * time_stamp),  
-         b1 ~ 1,
-         b2 ~ 1,
+         b1 ~ (1 || sample_id),
+         b2 ~ (1 || sample_id),
          nl = TRUE,
          cmc = FALSE),
       data = washout_off[group_id == 'T'], 
@@ -184,6 +174,25 @@ bayes_exp_off <-
 summary(bayes_exp_off)
 plot(bayes_exp_off)
 plot(marginal_effects(bayes_exp_off), points = TRUE)
+
+sid <- washout_off[group_id == 'T'][, unique(sample_id)]
+me_loss <- marginal_effects(bayes_exp_off, 
+                            sample_id = sid,
+                            re_formula = NULL, 
+                            method= 'predict')
+
+sid[1]
+plot(me_loss, ncols = 4, points = TRUE)
+
+# Gaussian processes
+gp_fit <- brm(value ~ gp(time_stamp, by = sample_id), 
+              data = washout_off[group_id == 'T'],
+              chains = 2)
+
+summary(gp_fit)
+
+plot(gp_fit)
+plot(marginal_effects(gp_fit), points = TRUE)
 
 loo(bayes_linear_off, bayes_exp_off)
 
