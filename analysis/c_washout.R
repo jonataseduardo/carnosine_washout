@@ -64,9 +64,6 @@ bayes_linear <-
   brm(value ~ time_stamp,
       data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-predict(bayes_linear)
-predict(classical_linear, interval = 'prediction')
-
 
 ## Classical and Bayesian Exponential Fit
 
@@ -74,31 +71,13 @@ classical_exp <-
   nls( value ~ SSasymp(time_stamp, Asym , R0, lrc), 
       data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-gg <- washout[group_id == 'T' & !is.na(time_stamp)][, .(time_stamp, value)]
-SSasymp
 
-ci1 <- predict(classical_exp)
-ci <- predictNLS(classical_exp, newdata = data.table(time_stamp = 0:16), interval = 'confidence')
-
-plot(ci)
-ci$summary
-
-str(ci)
-
-confint2(classical_exp)
-overview(classical_exp)
 
 exp(coef(classical_exp_off)[['lrc']])
-gp
 
-classical_exp
-classical_exp_off
-
-coef(classical_linear)
 
 exp_prior <- 
   prior(normal(20., 10), nlpar = "b1") +
-  #prior(student_t(3, 0, 10), lb = 0, nlpar = "b2" ) +
   prior(normal(1, 5), lb = 0, nlpar = "b2" ) +
   prior(normal(20., 5.), nlpar = "b3") 
 
@@ -210,9 +189,7 @@ gp_fit <- brm(value ~ gp(time_stamp, by = sample_id),
               chains = 2)
 
 summary(gp_fit)
-
 plot(gp_fit)
-plot(marginal_effects(gp_fit), points = TRUE)
 
 loo(bayes_linear_off, bayes_exp_off)
 
@@ -220,3 +197,41 @@ ggplot(washout, aes(x = time_stamp, y = value, color = sample_id)) +
   geom_point() + 
   geom_line() + 
   facet_wrap(~ group_id)
+
+
+ci_cl <- 
+  as.data.table(
+    predict(classical_linear, 
+            newdata = data.table(time_stamp = 0:16), 
+            interval = 'confidence'))
+ci_cl[, `:=`(fit_type = 'classical linear', time_stamp = 0:16)]
+
+ci_bl <- 
+  as.data.table(
+    predict(bayes_linear,
+            newdata = data.table(time_stamp = 0:16)
+            ))[, c(1,3,4)]
+ci_bl[, `:=`(fit_type = 'bayesian linear', time_stamp = 0:16)]
+
+ci_ce <- 
+  as.data.table(
+    predictNLS(classical_exp, 
+               newdata = data.table(time_stamp = 0:16), 
+               interval = 'confidence')$summary
+    )[, c('Sim.Mean', 'Sim.2.5%', 'Sim.97.5%')]
+ci_ce[, `:=`(fit_type = 'classical exponential', time_stamp = 0:16)]
+
+ci_be <- 
+  as.data.table(
+    predict(bayes_exp,
+            newdata = data.table(time_stamp = 0:16), 
+            ))[, c(1,3,4)]
+ci_be[, `:=`(fit_type = 'bayesian exponential', time_stamp = 0:16)]
+
+
+estimates <- rbindlist(list(ci_cl, ci_bl, ci_ce, ci_be))
+
+p <- 
+  ggplot(data = estimates, aes(x = time_stamp)) + 
+  geom_line(aes(y = fit, color = fit_type))
+
