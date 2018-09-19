@@ -1,13 +1,43 @@
 library(data.table)
 library(ggplot2)
 library(brms)
-library(nlstools)
 library(propagate)
-install.packages('propagate')
 
-help(package = 'nlstools')
-help(package = 'nls2')
-help(package = 'propagate')
+join_fit <- 
+  function(classical_linear, bayes_linear, classical_exp, bayes_exp){
+    ci_cl <- 
+      as.data.table(
+        predict(classical_linear, 
+                newdata = data.table(time_stamp = 0:16), 
+                interval = 'confidence'))
+    ci_cl[, `:=`(fit_type = 'classical linear', time_stamp = 0:16)]
+
+    ci_bl <- 
+      as.data.table(
+        fitted(bayes_linear,
+               newdata = data.table(time_stamp = 0:16)
+               ))[, c(1,3,4)]
+    ci_bl[, `:=`(fit_type = 'bayesian linear', time_stamp = 0:16)]
+
+    ci_ce <- 
+      as.data.table(
+        predictNLS(classical_exp, 
+                   newdata = data.table(time_stamp = 0:16), 
+                   interval = 'confidence')$summary
+        )[, c('Prop.Mean.1', 'Sim.2.5%', 'Sim.97.5%')]
+    ci_ce[, `:=`(fit_type = 'classical exponential', time_stamp = 0:16)]
+
+    ci_be <- 
+      as.data.table(
+        fitted(bayes_exp,
+               newdata = data.table(time_stamp = 0:16), 
+               ))[, c(1,3,4)]
+    ci_be[, `:=`(fit_type = 'bayesian exponential', time_stamp = 0:16)]
+
+
+    estimates <- rbindlist(list(ci_cl, ci_bl, ci_ce, ci_be))
+    return(estimates)
+  }
 
 washout_raw <- fread('carnosine_data.csv')
 
@@ -21,6 +51,21 @@ week_info <-
              time_stamp = c(NA, 0, 1, 2, 4, 8, 12, 16)) 
 
 washout <- washout_0[week_info, on = c("week_id")][!is.na(value)]
+
+## Subtracting initial cardosine level from idividuals
+w_off <- 
+  washout_raw[,lapply(names(washout_raw)[3:9], 
+                       function(x) get(x) - get('PRE_S01'))] 
+
+names(w_off) <- names(washout_raw)[3:9]
+w_off[, sample_id := washout_raw[, sample_id]]
+w_off[, group_id := washout_raw[, group_id]]
+
+lw_off <- 
+  melt(w_off, id = c('group_id', 'sample_id'), 
+       variable.name = 'week_id')
+
+washout_off <- lw_off[week_info, on = c("week_id")][!is.na(value)]
 
 # First we will test if the samples in the target group are draw from the
 # sample distribution from the control at time 0
@@ -71,10 +116,7 @@ classical_exp <-
   nls( value ~ SSasymp(time_stamp, Asym , R0, lrc), 
       data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-
-
 exp(coef(classical_exp_off)[['lrc']])
-
 
 exp_prior <- 
   prior(normal(20., 10), nlpar = "b1") +
@@ -92,15 +134,7 @@ bayes_exp <-
       prior = exp_prior,
       control = list(adapt_delta = 0.99))
 
-predict(bayes_exp)
-
-predict(classical_linear)
-
-str(classical_exp)
-classical_exp$predict
-
 plot(bayes_exp)
-
 plot(marginal_effects(bayes_exp), points = TRUE)
 loo(bayes_linear, bayes_exp)
 
@@ -108,19 +142,6 @@ loo(bayes_linear, bayes_exp)
 #Same analysis removing offset 
 ###########################################
 
-w_off <- 
-  washout_raw[,lapply(names(washout_raw)[3:9], 
-                       function(x) get(x) - get('PRE_S01'))] 
-
-names(w_off) <- names(washout_raw)[3:9]
-w_off[, sample_id := washout_raw[, sample_id]]
-w_off[, group_id := washout_raw[, group_id]]
-
-lw_off <- 
-  melt(w_off, id = c('group_id', 'sample_id'), 
-       variable.name = 'week_id')
-
-washout_off <- lw_off[week_info, on = c("week_id")][!is.na(value)]
 
 #Classical and Bayesian statist analysis for linear model 
 classical_linear_off <- 
@@ -131,8 +152,6 @@ bayes_linear_off <-
   brm(value ~ time_stamp,
       data = washout_off[group_id == 'T'])
 
-prior_summary(bayes_linear)
-
 summary(bayes_linear_off)
 plot(bayes_linear_off)
 plot(marginal_effects(bayes_linear_off), points = TRUE)
@@ -141,20 +160,9 @@ classical_exp_off <-
   nls( value ~ SSasymp(time_stamp, Asym, R0, lrc), 
       data = washout_off[group_id == 'T'])
 
-summary(classical_exp_off)
-
-p2 <- ggplot(data = washout_off[group_id == 'T'], aes(x = time_stamp, y = value)) +
-  geom_point() + 
-  stat_smooth(method = 'nls',
-              formula = y ~ SSasymp(x, Asym, R0, lrc),
-              se = TRUE
-              )
-
 exp_prior_off <- 
   prior(normal(21.16837, 5.43511), nlpar = "b1") +
   prior(normal(0.0, 5), lb = 0, nlpar = "b2" )
-
-washout_off[, sample_id := as.factor(sample_id)]
 
 bayes_exp_off <- 
   brm(bf(value  ~ b1 * exp(- b2 * time_stamp),  
@@ -167,29 +175,8 @@ bayes_exp_off <-
 
 summary(bayes_exp_off)
 plot(bayes_exp_off)
-predict(bayes_exp_off)
-predict(classical_exp, se.fit = TRUE, level = 0.95)
+plot(marginal_effects(bayes_exp_off), points = TRUE, plot = FALSE)
 
-
-p1 <- plot(marginal_effects(bayes_exp_off), points = TRUE, plot = FALSE)
-
-
-sid <- washout_off[group_id == 'T'][, unique(sample_id)]
-me_loss <- marginal_effects(bayes_exp_off, 
-                            sample_id = sid,
-                            re_formula = NULL, 
-                            method= 'predict')
-
-sid[1]
-plot(me_loss, ncols = 4, points = TRUE)
-
-# Gaussian processes
-gp_fit <- brm(value ~ gp(time_stamp, by = sample_id), 
-              data = washout_off[group_id == 'T'],
-              chains = 2)
-
-summary(gp_fit)
-plot(gp_fit)
 
 loo(bayes_linear_off, bayes_exp_off)
 
@@ -198,40 +185,15 @@ ggplot(washout, aes(x = time_stamp, y = value, color = sample_id)) +
   geom_line() + 
   facet_wrap(~ group_id)
 
-
-ci_cl <- 
-  as.data.table(
-    predict(classical_linear, 
-            newdata = data.table(time_stamp = 0:16), 
-            interval = 'confidence'))
-ci_cl[, `:=`(fit_type = 'classical linear', time_stamp = 0:16)]
-
-ci_bl <- 
-  as.data.table(
-    predict(bayes_linear,
-            newdata = data.table(time_stamp = 0:16)
-            ))[, c(1,3,4)]
-ci_bl[, `:=`(fit_type = 'bayesian linear', time_stamp = 0:16)]
-
-ci_ce <- 
-  as.data.table(
-    predictNLS(classical_exp, 
-               newdata = data.table(time_stamp = 0:16), 
-               interval = 'confidence')$summary
-    )[, c('Sim.Mean', 'Sim.2.5%', 'Sim.97.5%')]
-ci_ce[, `:=`(fit_type = 'classical exponential', time_stamp = 0:16)]
-
-ci_be <- 
-  as.data.table(
-    predict(bayes_exp,
-            newdata = data.table(time_stamp = 0:16), 
-            ))[, c(1,3,4)]
-ci_be[, `:=`(fit_type = 'bayesian exponential', time_stamp = 0:16)]
-
-
-estimates <- rbindlist(list(ci_cl, ci_bl, ci_ce, ci_be))
+estimates
 
 p <- 
   ggplot(data = estimates, aes(x = time_stamp)) + 
-  geom_line(aes(y = fit, color = fit_type))
+  geom_line(aes(y = fit, color = fit_type), size = 2) + 
+  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = fit_type), alpha = 0.1) + 
+  geom_point(data = washout[group_id == 'T'], aes(x = time_stamp, y = value)) + 
+  theme_bw()
+
+
+
 
