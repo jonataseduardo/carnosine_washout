@@ -4,21 +4,80 @@ library(brms)
 library(propagate)
 library(knitr)
 
+
+
+make_labels <- 
+  function(classical_linear, bayes_linear, classical_exp, bayes_exp){
+
+    linear_fit_label <- 
+      function(fl){
+        paste0(format(fl[1], digits = 3), 
+               ' - ', 
+               format(-1 * fl[2], digits = 3), ' t')
+      }
+
+    c_exp_fit_label <- 
+      function(fl){
+        paste0(format(fl[2], digits = 3),
+               ' Exp(-', 
+               format(exp(fl[3]), digits = 2), 
+               ' t) + ',
+               format(fl[1], digits = 3))
+      }
+
+    b_exp_fit_label <- 
+      function(fl){
+        if(length(fl) == 3){
+          paste0(format(fl[1], digits = 3),
+                 ' Exp(-', 
+                 format(fl[2], digits = 2), 
+                 ' t) + ',
+                 format(fl[3], digits = 3))
+        }else{
+          paste0(format(fl[1], digits = 3),
+                 ' Exp(-', 
+                 format(fl[2], digits = 2), 
+                 ' t)')
+        }
+      }
+
+    l_cl <- summary(classical_linear)$coefficients[,'Estimate']
+    l_ce <- summary(classical_exp)$coefficients[,'Estimate']
+    l_be <- summary(bayes_exp)$fixed[,'Estimate']
+    l_bl <- summary(bayes_linear)$fixed[,'Estimate']
+
+    label_dt <- 
+      data.table(statistics = rep(c('classical', 'bayesian'), each = 2),
+                 func = rep(c('linear', 'exponential'), 2),
+                 label = c(linear_fit_label(l_cl),
+                           c_exp_fit_label(l_ce),
+                           linear_fit_label(l_bl),
+                           b_exp_fit_label(l_be)))
+
+    return(label_dt[])
+  }
+
+
 join_fit <- 
   function(classical_linear, bayes_linear, classical_exp, bayes_exp){
+
     ci_cl <- 
       as.data.table(
         predict(classical_linear, 
                 newdata = data.table(time_stamp = 0:16), 
                 interval = 'confidence'))
-    ci_cl[, `:=`(fit_type = 'classical linear', time_stamp = 0:16)]
+    ci_cl[, `:=`(statistics = 'classical', 
+                 func = 'linear', 
+                 time_stamp = 0:16)]
 
     ci_bl <- 
       as.data.table(
         fitted(bayes_linear,
                newdata = data.table(time_stamp = 0:16)
                ))[, c(1,3,4)]
-    ci_bl[, `:=`(fit_type = 'bayesian linear', time_stamp = 0:16)]
+    ci_bl[, `:=`(statistics = 'bayesian', 
+                 func = 'linear', 
+                 time_stamp = 0:16)]
 
     ci_ce <- 
       as.data.table(
@@ -26,14 +85,18 @@ join_fit <-
                    newdata = data.table(time_stamp = 0:16), 
                    interval = 'confidence')$summary
         )[, c('Prop.Mean.1', 'Sim.2.5%', 'Sim.97.5%')]
-    ci_ce[, `:=`(fit_type = 'classical exponential', time_stamp = 0:16)]
+    ci_ce[, `:=`(statistics = 'classical', 
+                 func = 'exponential', 
+                 time_stamp = 0:16)]
 
     ci_be <- 
       as.data.table(
         fitted(bayes_exp,
                newdata = data.table(time_stamp = 0:16), 
                ))[, c(1,3,4)]
-    ci_be[, `:=`(fit_type = 'bayesian exponential', time_stamp = 0:16)]
+    ci_be[, `:=`(statistics = 'bayesian', 
+                 func = 'exponential', 
+                 time_stamp = 0:16)]
 
 
     estimates <- rbindlist(list(ci_cl, ci_bl, ci_ce, ci_be))
@@ -229,8 +292,11 @@ b2_l <- format(abs(blo$fixed["time_stamp","Estimate"]), digits = 3)
 le <- paste0(b1_e,' Exp(-', b2_e, ' t)')
 ll <- paste0(b1_l, ' - ',  b2_l, ' t')
 
+gg <- estimates_off[statistics == 'bayesian']
+estimates_off
+
 {
-ggplot(data = estimates_off[!grepl('classical', fit_type)], aes(x = time_stamp)) + 
+ggplot(data = gg, aes(x = time_stamp)) + 
   theme_classic() + 
   labs(x = 'time in weeks', y = 'carnosine variation') + 
   theme(legend.title = element_blank(), 
@@ -241,8 +307,8 @@ ggplot(data = estimates_off[!grepl('classical', fit_type)], aes(x = time_stamp))
   scale_color_grey(labels = c(le,ll)) + 
   scale_fill_grey(labels = c(le,ll)) + 
   scale_linetype_discrete(labels = c(le,ll)) + 
-  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = fit_type), alpha = 0.3) + 
-  geom_line(aes(y = fit, linetype = fit_type), size = 2, color = 'black') + 
+  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = func), alpha = 0.3) + 
+  geom_line(aes(y = fit, linetype = func), size = 2, color = 'black') + 
   geom_point(data = washout_off[group_id == 'T'], 
              aes(x = time_stamp, y = value),
              size = 2) 
