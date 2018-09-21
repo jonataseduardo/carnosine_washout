@@ -3,44 +3,46 @@ library(ggplot2)
 library(brms)
 library(propagate)
 library(knitr)
-library(devtools)
-#install_github('paul-buerkner/brms') 
 
+
+####################
+# Auxiliary functions 
+###################
+
+b_exp_fit_label <- 
+  function(fl){
+    if(length(fl) == 3){
+      paste0(format(fl['b1_Intercept'], digits = 3),
+             ' Exp(-', 
+             format(fl['b2_Intercept'], digits = 2), 
+             ' t) + ',
+             format(fl['b3_Intercept'], digits = 3))
+    }else{
+      paste0(format(fl['b1_Intercept'], digits = 3),
+             ' Exp(-', 
+             format(fl['b2_Intercept'], digits = 2), 
+             ' t)')
+    }
+  }
+
+linear_fit_label <- 
+  function(fl){
+    paste0(format(fl[1], digits = 3), 
+           ' - ', 
+           format(-1 * fl[2], digits = 3), ' t')
+  }
+
+c_exp_fit_label <- 
+  function(fl){
+    paste0(format(fl['R0'], digits = 3),
+           ' Exp(-', 
+           format(exp(fl['lrc']), digits = 2), 
+           ' t) + ',
+           format(fl['Asym'], digits = 3))
+  }
 
 make_labels <- 
   function(classical_linear, bayes_linear, classical_exp, bayes_exp){
-
-    linear_fit_label <- 
-      function(fl){
-        paste0(format(fl[1], digits = 3), 
-               ' - ', 
-               format(-1 * fl[2], digits = 3), ' t')
-      }
-
-    c_exp_fit_label <- 
-      function(fl){
-        paste0(format(fl[2], digits = 3),
-               ' Exp(-', 
-               format(exp(fl[3]), digits = 2), 
-               ' t) + ',
-               format(fl[1], digits = 3))
-      }
-
-    b_exp_fit_label <- 
-      function(fl){
-        if(length(fl) == 3){
-          paste0(format(fl[1], digits = 3),
-                 ' Exp(-', 
-                 format(fl[2], digits = 2), 
-                 ' t) + ',
-                 format(fl[3], digits = 3))
-        }else{
-          paste0(format(fl[1], digits = 3),
-                 ' Exp(-', 
-                 format(fl[2], digits = 2), 
-                 ' t)')
-        }
-      }
 
     l_cl <- summary(classical_linear)$coefficients[,'Estimate']
     l_ce <- summary(classical_exp)$coefficients[,'Estimate']
@@ -56,7 +58,6 @@ make_labels <-
                            b_exp_fit_label(l_be)))
 
     return(label_dt[])
-  }
 
 join_fit <- 
   function(classical_linear, bayes_linear, classical_exp, bayes_exp){
@@ -106,7 +107,11 @@ join_fit <-
     return(estimates[label_dt, on = c('statistics', 'func')])
   }
 
-  {
+
+##########################
+# Prepering the data 
+############################
+
   washout_raw <- fread('carnosine_data.csv')
 
   washout_0 <- 
@@ -134,44 +139,15 @@ join_fit <-
          variable.name = 'week_id')
 
   washout_off <- lw_off[week_info, on = c("week_id")][!is.na(value)]
-  } 
 
-# First we will test if the samples in the target group are draw from the
-# sample distribution from the control at time 0
 
-## Result
-#D = 0.36364, p-value = 0.7473
-#alternative hypothesis: two-sided
-# There is no evidence that the two distribution are diferents from each
-# other
 
-# Withing individual variaility is lower then the group variability analisys 
-washout[group_id == 'C', var(value)]
-washout[group_id == 'C', var(value), by = sample_id]
-
-t.test(washout[is.na(time_stamp) & group_id == 'T', value], 
-       washout[is.na(time_stamp) & group_id == 'C', value])
-
-wilcox.test(washout[is.na(time_stamp) & group_id == 'T', value], 
-            washout[is.na(time_stamp) & group_id == 'C', value])
-
-# Sencond we want to test if the distribution of the cardosine in the subjects
-# are diferent for each time 
-
-init_s <- washout[is.na(time_stamp) & group_id == 'T', value]
-
-diff_time_tests <- 
-  washout[!is.na(time_stamp) & time_stamp != 1 & group_id == 'T', 
-          .(wc_pval = wilcox.test(init_s, value, alternative = 'less')$p.value,
-            t_pval = t.test(init_s, value, alternative = 'less')$p.value), 
-          by = time_stamp]
 
 ##########################################
 # Fiting full data
 ##########################################
 
 ## Classical and Bayesian linear fit
-  {
   classical_linear <- 
     lm(formula = value ~ time_stamp, 
        data = washout[group_id == 'T' & !is.na(time_stamp)])
@@ -180,9 +156,7 @@ diff_time_tests <-
     brm(value ~ time_stamp,
         data = washout[group_id == 'T' & !is.na(time_stamp)])
 
-  }
 ## Classical and Bayesian Exponential Fit
-  {
   classical_exp <- 
     nls( value ~ SSasymp(time_stamp, Asym , R0, lrc), 
         data = washout[group_id == 'T' & !is.na(time_stamp)])
@@ -211,28 +185,23 @@ diff_time_tests <-
         data = washout[group_id == 'T'& !is.na(time_stamp)], 
         prior = exp_prior,
         control = list(adapt_delta = 0.99))
-  }
 
 ##########################################
 #Analysis removing offset 
 ###########################################
 
 #Classical and Bayesian statist analysis for linear model 
-  {
-
   classical_linear_off <- 
     lm(formula = value ~ time_stamp, 
        data = washout_off[group_id == 'T'])
 
   bayes_linear_off <- 
-    brm(value ~ 1 + (time_stamp || sample_id),
+    brm(value ~ time_stamp,
         data = washout_off[group_id == 'T'])
-  }
 
 #Classical and Bayesian exponential model 
-  {
   classical_exp_off <- 
-    nls( value ~ SSasymp(time_stamp, Asym, R0, lrc), 
+    nls(value ~ SSasymp(time_stamp, Asym, R0, lrc), 
         data = washout_off[group_id == 'T'])
 
   ## values for b1 prior
@@ -269,32 +238,7 @@ diff_time_tests <-
         prior = exp_prior,
         control = list(adapt_delta = 0.99))
 
-  summary(bayes_exp_off2)
-  }
-
-
-cl <- summary(classical_linear)$coefficients
-ce <- summary(classical_exp)$coefficients
-be <- summary(bayes_exp)$fixed
-bl <- summary(bayes_linear)$fixed
-
-clo <- summary(classical_linear_off)$coefficients
-ceo <- summary(classical_exp_off)$coefficients
-beo <- summary(bayes_exp_off)$fixed
-blo <- summary(bayes_linear_off)$fixed
-
-summary(bayes_exp)
-
-kable(cl)
-kable(ce)
-kable(be)
-kable(bl)
-kable(clo)
-kable(ceo)
-kable(beo)
-kable(blo)
-  
-
+## Miscelanious 
 plot(bayes_exp)
 plot(marginal_effects(bayes_exp), points = TRUE)
 loo(bayes_linear, bayes_exp)
@@ -306,12 +250,36 @@ plot(bayes_linear_off)
 plot(marginal_effects(bayes_linear_off), points = TRUE)
 loo(bayes_linear_off, bayes_exp_off)
 
+################################
+# Analysis of the fit results
+################################
+
+cl <- summary(classical_linear)$coefficients
+bl <- summary(bayes_linear)$fixed
+ce <- summary(classical_exp)$coefficients
+be <- summary(bayes_exp)$fixed
+
+clo <- summary(classical_linear_off)$coefficients
+blo <- summary(bayes_linear_off)$fixed
+ceo <- summary(classical_exp_off)$coefficients
+beo <- summary(bayes_exp_off)$fixed
+beo2 <- summary(bayes_exp_off2)$fixed
+
+kable(cl)
+kable(bl)
+kable(ce)
+kable(be)
+kable(clo)
+kable(blo)
+kable(ceo)
+kable(beo)
+kable(beo2)
+
 
 washout_plot <- 
   rbindlist(list(
        washout[, has_offset := TRUE], 
        washout_off[, has_offset := FALSE]))
-
 
 estimates <- 
   rbindlist(list(
@@ -340,3 +308,38 @@ ggplot(data = estimates[statistics == 'bayesian' & has_offset == FALSE],
              aes(x = time_stamp, y = value),
              size = 2) 
 }
+
+
+###################
+# Generic analysis 
+###################
+
+# First we will test if the samples in the target group are draw from the
+# sample distribution from the control at time 0
+
+## Result
+#D = 0.36364, p-value = 0.7473
+#alternative hypothesis: two-sided
+# There is no evidence that the two distribution are diferents from each
+# other
+
+# Withing individual variaility is lower then the group variability analisys 
+washout[group_id == 'C', var(value)]
+washout[group_id == 'C', var(value), by = sample_id]
+
+t.test(washout[is.na(time_stamp) & group_id == 'T', value], 
+       washout[is.na(time_stamp) & group_id == 'C', value])
+
+wilcox.test(washout[is.na(time_stamp) & group_id == 'T', value], 
+            washout[is.na(time_stamp) & group_id == 'C', value])
+
+# Sencond we want to test if the distribution of the cardosine in the subjects
+# are diferent for each time 
+
+init_s <- washout[is.na(time_stamp) & group_id == 'T', value]
+
+diff_time_tests <- 
+  washout[!is.na(time_stamp) & time_stamp != 1 & group_id == 'T', 
+          .(wc_pval = wilcox.test(init_s, value, alternative = 'less')$p.value,
+            t_pval = t.test(init_s, value, alternative = 'less')$p.value), 
+          by = time_stamp]
