@@ -1,25 +1,23 @@
 
 # Results with full data
 
+![](carnosine_fit.png)
 
-![]('carnosine_fit.png')
-
-
-## Classical linear fit
+### Classical linear fit
 |      | Estimate  | Std. Error  | t value    | p-val       |
 | :----| --------: | ----------: | ---------: | ----------: |
 | b1   | 39.32577  | 2.3542415   | 16.704219  | 0.00e+00    |
 | b2   | -1.14151  | 0.2631555   | -4.337777  | 6.07e-05    |
 
 
-## Bayesian linear fit
+### Bayesian linear fit
 |     | Estimate  | Est.Error  | l-95% CI   | u-95% CI    | Eff.Sample  | Rhat       |
 | :---| --------: | ---------: | ---------: | ----------: | ----------: | ---------: |
 | b1  | 39.32273  | 2.3719449  | 34.709820  | 43.9008426  | 3179.036    | 0.9997713  |
 | b2  | -1.14789  | 0.2705071  | -1.665088  | -0.6181038  | 3224.959    | 0.9994170  |
 
 
-## Classical exponential fit
+### Classical exponential fit
 |         | Estimate   | Std. Error  | t value     | p-val       |
 | :----   | ---------: | ----------: | ----------: | ----------: |
 | b3      | 12.463031  | 28.830447   | 0.4322871   | 0.6672230   |
@@ -27,7 +25,7 @@
 | log(b2) | -2.728571  | 1.640358    | -1.6633995  | 0.1019211   |
 
 
-## Bayesian exponential fit
+### Bayesian exponential fit
 |       | Estimate    | Est.Error  | l-95% CI    | u-95% CI  | Eff.Sample  | Rhat      |
 | :---- | ----------: | ---------: | ----------: | --------: | ----------: | --------: |
 | b2    | 0.0694004   | 0.0091315  | 0.0535019   | 0.08843   | 471.2823    | 1.011154  |
@@ -36,23 +34,23 @@
 
 # Results removing off set
 
-![]('carnosine_fit_offset.png')
+![](carnosine_fit_offset.png)
 
-## Classical linear fit
+### Classical linear fit
 |     | Estimate   | Std. Error  | t value    | p-val      |
 | :---| ---------: | ----------: | ---------: | ---------: |
 | b1  | 18.076006  | 1.4951921   | 12.089420  | 0          |
 | b2  | -1.265346  | 0.1671315   | -7.570956  | 0          |
 
 
-## Bayesian linear fit
+### Bayesian linear fit
 |      | Estimate   | Est.Error  | l-95% CI   | u-95% CI    | Eff.Sample  | Rhat      |
 | :--- | ---------: | ---------: | ---------: | ----------: | ----------: | --------: |
 | b1   | 18.084047  | 1.561388   | 14.974918  | 21.1910472  | 3470.885    | 1.000528  |
 | b2   | -1.267423  | 0.172683   | -1.597395  | -0.9209664  | 3756.846    | 1.000153  |
 
 
-## Classical exponential fit
+### Classical exponential fit
 |         | Estimate    | Std. Error  | t value     | p-val        |
 | :----   | ----------: | ----------: | ----------: | -----------: |
 | b3      | -25.589706  | 52.872038   | -0.4839932  | 0.6303123    |
@@ -60,14 +58,14 @@
 | log(b2) | -3.275672   | 1.576626    | -2.0776476  | 0.0424234    |
 
 
-## Bayesian exponential fit considering b3 = 0
+### Bayesian exponential fit considering b3 = 0
 |               | Estimate    | Est.Error  | l-95% CI    | u-95% CI   | Eff.Sample  | Rhat      |
 | :------------ | ----------: | ---------: | ----------: | ---------: | ----------: | --------: |
 | b1            | 19.6921012  | 1.7967656  | 16.1853697  | 23.208439  | 2364.349    | 1.000978  |
 | b2            | 0.1507169   | 0.0307822  | 0.0979366   | 0.219239   | 2313.029    | 1.000574  |
 
 
-## Bayesian exponential fit adjusting b3
+### Bayesian exponential fit adjusting b3
 |               | Estimate   | Est.Error  | l-95% CI     | u-95% CI     | Eff.Sample  | Rhat      |
 | :------------ | ---------: | ---------: | -----------: | -----------: | ----------: | --------: |
 | b2            | 0.05527    | 0.0060774  | 0.0434406    | 0.0667637    | 529.6444    | 1.012707  |
