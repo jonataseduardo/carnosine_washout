@@ -1,6 +1,10 @@
 
 # Results with full data
 
+
+![]('carnosine_fit.png')
+
+
 ## Classical linear fit
 |      | Estimate  | Std. Error  | t value    | p-val       |
 | :----| --------: | ----------: | ---------: | ----------: |
@@ -31,6 +35,8 @@
 | b3    | 13.2320463  | 2.2622376  | 8.4777866   | 17.15853  | 456.6244    | 1.010384  |
 
 # Results removing off set
+
+![]('carnosine_fit_offset.png')
 
 ## Classical linear fit
 |     | Estimate   | Std. Error  | t value    | p-val      |
