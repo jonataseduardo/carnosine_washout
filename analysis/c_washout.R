@@ -27,9 +27,9 @@ b_exp_fit_label <-
 
 linear_fit_label <- 
   function(fl){
-    paste0(format(fl[1], digits = 3), 
+    paste0(format(fl[1], digits = 4), 
            ' - ', 
-           format(-1 * fl[2], digits = 3), ' t')
+           format(-1 * fl[2], digits = 4), ' t')
   }
 
 c_exp_fit_label <- 
@@ -174,6 +174,10 @@ join_fit <-
     prior(student_t(3, 0, 13), lb = 0, nlpar = "b2" ) +
     prior(normal(22.02241, 8.636423), nlpar = "b3") 
 
+  # f = b1*exp(-b2 * time) + b3 + N(0, sigma)
+  
+  # f = b1*exp(-b2 * time) + N(0, sigma)
+
   bayes_exp <- 
     brm(bf(value ~ b1 * exp(- b2 * time_stamp) + b3,  
            b2 ~ 1, 
@@ -275,6 +279,10 @@ kable(ceo)
 kable(beo)
 kable(beo2)
 
+loo(bayes_linear, bayes_exp)
+kfold(bayes_linear, bayes_exp, K = 10)
+loo_off <- loo(bayes_linear_off, bayes_exp_off)
+kable(loo_off, format = 'markdown')
 
 washout_plot <- 
   rbindlist(list(
@@ -307,8 +315,31 @@ ggplot(data = estimates[statistics == 'bayesian' & has_offset == FALSE],
   geom_point(data = washout_plot[group_id == 'T' & has_offset == FALSE], 
              aes(x = time_stamp, y = value),
              size = 2) 
+  ggsave('b_linear_exp_offset.png')
 }
 
+{
+ggplot(data = estimates[has_offset == TRUE], 
+       aes(x = time_stamp)) + 
+  theme_bw() + 
+  labs(x = 'time in weeks', y = 'carnosine variation') + 
+  theme(legend.title = element_blank(), 
+        legend.position = c(0.8, 0.9),
+        text = element_text(size = 14),
+        legend.key.width=unit(2,"line")
+        ) + 
+  scale_color_discrete() + 
+  scale_fill_discrete() + 
+  scale_linetype_discrete() + 
+  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = label), alpha = 0.3) + 
+  geom_line(aes(y = fit, linetype = label), size = 1.5, color = 'black') + 
+  geom_point(data = washout_plot[group_id == 'T' & has_offset == TRUE], 
+             aes(x = time_stamp, y = value),
+             size = 1.5) + 
+  facet_grid( statistics ~ func)
+  ggsave('carnosine_fit.png')
+}
+estimates[has_offset == TRUE]
 
 ###################
 # Generic analysis 
@@ -327,6 +358,9 @@ ggplot(data = estimates[statistics == 'bayesian' & has_offset == FALSE],
 washout[group_id == 'C', var(value)]
 washout[group_id == 'C', var(value), by = sample_id]
 
+washout[group_id == 'T' & is.na(time_stamp), mean(value)]
+
+
 t.test(washout[is.na(time_stamp) & group_id == 'T', value], 
        washout[is.na(time_stamp) & group_id == 'C', value])
 
@@ -343,3 +377,5 @@ diff_time_tests <-
           .(wc_pval = wilcox.test(init_s, value, alternative = 'less')$p.value,
             t_pval = t.test(init_s, value, alternative = 'less')$p.value), 
           by = time_stamp]
+
+kable(diff_time_tests)
