@@ -1,5 +1,29 @@
 
-# Results with full data
+# Main Results
+
+The first test is to determine when the cardosine level stop to be statiscaly
+different from the begning of the experiment. 
+
+| weeks|  pval(wc)|  pval(tt)|
+|-----:|---------:|---------:|
+|     0| 0.0007003| 0.0003119|
+|     2| 0.0197802| 0.0731424|
+|     4| 0.0167982| 0.0113047|
+|     8| 0.0965933| 0.0648252|
+|    12| 0.1571860| 0.1447258|
+|    16| 0.5295785| 0.5117519|
+
+### Whashout fit 
+
+![](b_linear_exp_offset.png)
+
+|             |LOOIC |  SE |
+|------------:|-----:|----:|
+|linear       |395.41| 9.21|
+|exp          |397.94| 8.99|
+|linear - exp |-2.53 | 4.46|
+
+## Results with full data
 
 ![](carnosine_fit.png)
 
@@ -32,7 +56,7 @@
 | b1    | 27.2618985  | 2.1659444  | 23.5507537  | 31.79536  | 456.6387    | 1.010454  |
 | b3    | 13.2320463  | 2.2622376  | 8.4777866   | 17.15853  | 456.6244    | 1.010384  |
 
-# Results removing off set
+## Results removing off set
 
 ![](carnosine_fit_offset.png)
 
