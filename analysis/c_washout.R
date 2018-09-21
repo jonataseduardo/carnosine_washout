@@ -3,7 +3,8 @@ library(ggplot2)
 library(brms)
 library(propagate)
 library(knitr)
-
+library(devtools)
+#install_github('paul-buerkner/brms') 
 
 
 make_labels <- 
@@ -57,7 +58,6 @@ make_labels <-
     return(label_dt[])
   }
 
-
 join_fit <- 
   function(classical_linear, bayes_linear, classical_exp, bayes_exp){
 
@@ -98,9 +98,12 @@ join_fit <-
                  func = 'exponential', 
                  time_stamp = 0:16)]
 
+    label_dt <- 
+      make_labels(classical_linear, bayes_linear, 
+                  classical_exp, bayes_exp)
 
     estimates <- rbindlist(list(ci_cl, ci_bl, ci_ce, ci_be))
-    return(estimates)
+    return(estimates[label_dt, on = c('statistics', 'func')])
   }
 
   {
@@ -163,9 +166,9 @@ diff_time_tests <-
             t_pval = t.test(init_s, value, alternative = 'less')$p.value), 
           by = time_stamp]
 
-#############################
+##########################################
 # Fiting full data
-###########################
+##########################################
 
 ## Classical and Bayesian linear fit
   {
@@ -194,15 +197,17 @@ diff_time_tests <-
 
   exp_prior <- 
     prior(normal(18.73335, 12.28948), nlpar = "b1") +
-    #prior(normal(1, 5), lb = 0, nlpar = "b2" ) +
     prior(student_t(3, 0, 13), lb = 0, nlpar = "b2" ) +
     prior(normal(22.02241, 8.636423), nlpar = "b3") 
 
   bayes_exp <- 
-    brm(bf(value  ~ b1 * exp(- b2 * time_stamp) + b3 + 0,  
-           b1 + b2 + b3 ~ 1, 
+    brm(bf(value ~ b1 * exp(- b2 * time_stamp) + b3,  
+           b2 ~ 1, 
+           b1 ~ 1,
+           b3 ~ 1, 
            nl = TRUE,
-           cmc = FALSE),
+           sigma = TRUE, # sigma = TRUE and cmc = TRUE is needed to 
+           cmc = TRUE),  # estimate b3 as offset (not in the documentation)
         data = washout[group_id == 'T'& !is.na(time_stamp)], 
         prior = exp_prior,
         control = list(adapt_delta = 0.99))
@@ -220,7 +225,7 @@ diff_time_tests <-
        data = washout_off[group_id == 'T'])
 
   bayes_linear_off <- 
-    brm(value ~ time_stamp,
+    brm(value ~ 1 + (time_stamp || sample_id),
         data = washout_off[group_id == 'T'])
   }
 
@@ -246,57 +251,79 @@ diff_time_tests <-
         data = washout_off[group_id == 'T'], 
         prior = exp_prior_off,
         control = list(adapt_delta = 0.99))
+
+  exp_prior_off2 <- 
+    prior(normal(18.73335, 12.28948), nlpar = "b1") +
+    prior(student_t(3, 0, 13), lb = 0, nlpar = "b2" ) +
+    prior(normal(0, 8.636423), nlpar = "b3") 
+
+  bayes_exp_off2 <- 
+    brm(bf(value ~ b1 * exp(- b2 * time_stamp) + b3,  
+           b2 ~ 1, 
+           b1 ~ 1,
+           b3 ~ 1, 
+           nl = TRUE,
+           sigma = TRUE,
+           cmc = TRUE),
+        data = washout_off[group_id == 'T'& !is.na(time_stamp)], 
+        prior = exp_prior,
+        control = list(adapt_delta = 0.99))
+
+  summary(bayes_exp_off2)
   }
 
-estimates <- 
-  join_fit(classical_linear, bayes_linear, 
-           classical_exp, bayes_exp)
 
-estimates_off <- 
-  join_fit(classical_linear_off, bayes_linear_off, 
-           classical_exp_off, bayes_exp_off)
+cl <- summary(classical_linear)$coefficients
+ce <- summary(classical_exp)$coefficients
+be <- summary(bayes_exp)$fixed
+bl <- summary(bayes_linear)$fixed
 
+clo <- summary(classical_linear_off)$coefficients
+ceo <- summary(classical_exp_off)$coefficients
+beo <- summary(bayes_exp_off)$fixed
+blo <- summary(bayes_linear_off)$fixed
 
-ggplot(data = estimates_off[!grepl('classical', fit_type)], aes(x = time_stamp)) + 
-geom_line(aes(y = fit, color = fit_type), size = 2) + 
-geom_ribbon(aes(ymax = upr, ymin = lwr, fill = fit_type), alpha = 0.1) + 
-geom_point(data = washout_off[group_id == 'T'], aes(x = time_stamp, y = value)) + 
-theme_bw()
+summary(bayes_exp)
 
-
-cl <- summary(classical_linear)
-ce <- summary(classical_exp)
-be <- summary(bayes_exp)
-bl <- summary(bayes_linear)
-
-clo <- summary(classical_linear_off)
-ceo <- summary(classical_exp_off)
-beo <- summary(bayes_exp_off)
-blo <- summary(bayes_linear_off)
+kable(cl)
+kable(ce)
+kable(be)
+kable(bl)
+kable(clo)
+kable(ceo)
+kable(beo)
+kable(blo)
+  
 
 plot(bayes_exp)
 plot(marginal_effects(bayes_exp), points = TRUE)
 loo(bayes_linear, bayes_exp)
 
 plot(bayes_exp_off)
-plot(marginal_effects(bayes_exp_off), points = TRUE)
+plot(marginal_effects(bayes_exp_off2), points = TRUE)
 
 plot(bayes_linear_off)
 plot(marginal_effects(bayes_linear_off), points = TRUE)
 loo(bayes_linear_off, bayes_exp_off)
 
-b1_e <- format(beo$fixed["b1_Intercept","Estimate"], digits = 3)
-b2_e <- format(beo$fixed["b2_Intercept","Estimate"], digits = 2)
-b1_l <- format(blo$fixed["Intercept","Estimate"], digits = 3)
-b2_l <- format(abs(blo$fixed["time_stamp","Estimate"]), digits = 3)
-le <- paste0(b1_e,' Exp(-', b2_e, ' t)')
-ll <- paste0(b1_l, ' - ',  b2_l, ' t')
 
-gg <- estimates_off[statistics == 'bayesian']
-estimates_off
+washout_plot <- 
+  rbindlist(list(
+       washout[, has_offset := TRUE], 
+       washout_off[, has_offset := FALSE]))
+
+
+estimates <- 
+  rbindlist(list(
+    join_fit(classical_linear, bayes_linear, 
+             classical_exp, bayes_exp)[, has_offset := TRUE],
+    join_fit(classical_linear_off, bayes_linear_off, 
+             classical_exp_off, bayes_exp_off)[, has_offset := FALSE]))
+
 
 {
-ggplot(data = gg, aes(x = time_stamp)) + 
+ggplot(data = estimates[statistics == 'bayesian' & has_offset == FALSE], 
+       aes(x = time_stamp)) + 
   theme_classic() + 
   labs(x = 'time in weeks', y = 'carnosine variation') + 
   theme(legend.title = element_blank(), 
@@ -304,12 +331,12 @@ ggplot(data = gg, aes(x = time_stamp)) +
         text = element_text(size = 18),
         legend.key.width=unit(2,"line")
         ) + 
-  scale_color_grey(labels = c(le,ll)) + 
-  scale_fill_grey(labels = c(le,ll)) + 
-  scale_linetype_discrete(labels = c(le,ll)) + 
-  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = func), alpha = 0.3) + 
-  geom_line(aes(y = fit, linetype = func), size = 2, color = 'black') + 
-  geom_point(data = washout_off[group_id == 'T'], 
+  scale_color_grey() + 
+  scale_fill_grey() + 
+  scale_linetype_discrete() + 
+  geom_ribbon(aes(ymax = upr, ymin = lwr, fill = label), alpha = 0.3) + 
+  geom_line(aes(y = fit, linetype = label), size = 2, color = 'black') + 
+  geom_point(data = washout_plot[group_id == 'T' & has_offset == FALSE], 
              aes(x = time_stamp, y = value),
              size = 2) 
 }
